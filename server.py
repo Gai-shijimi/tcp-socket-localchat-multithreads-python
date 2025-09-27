@@ -4,39 +4,82 @@ import signal
 import sys 
 import threading
 
+
+
+SERVER_PATH = '/tmp/socket_file'
+stop_event = threading.Event()
+
 def handler(signum, _):
     print(f'{signum}を受け取りました。')
-    sys.exit(0)
+    stop_event.set()
 
-def handle_client(connection, ):
+
+def handle_client(connection):
     print("クライアントと接続しました。")
 
     file = connection.makefile('rwb', buffering=0)
-    for line in file:
-        msg = line.rstrip(b'\n').decode('utf-8')
-        print('受信：', msg)
-        response = ('サーバーからの応答：' + msg + '\n').encode('utf-8')
-        file.write(response)
+    try:
+        for line in file:
+            msg = line.rstrip(b'\n').decode('utf-8')
+            print('受信：', msg)
+            response = ('サーバーからの応答：' + msg + '\n').encode('utf-8')
+            file.write(response)
+    except Exception as e:
+        print('handle_clientエラー: ', e)
 
-server_address = '/tmp/socket_file'
+    finally:
+        try:
+            file.close()
+        except:
+            pass
+        try:
+            connection.close()
+        except:
+            pass
+        print('クライアント切断')
 
-try:
-    os.unlink(server_address)
-except FileNotFoundError:
-    pass
 
+def main():
 
-sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-print('サーバーを起動しています.....{}'.format(server_address))
-sock.bind(server_address)
-sock.listen(1)
+    try:
+        os.unlink(SERVER_PATH)
+    except FileNotFoundError:
+        pass
 
-signal.signal(signal.SIGINT, handler)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        print('サーバーを起動しています.....{}'.format(SERVER_PATH))
+        sock.bind(SERVER_PATH)
+        sock.listen(1)
+        sock.settimeout(0.5)
 
-while True:
-    connection, _ = sock.accept()
+        signal.signal(signal.SIGINT, handler)
 
-    thread_handle_client = threading.Thread(target=handle_client, args=(connection,), daemon=True)
-    thread_handle_client.start()
+        threads = []
+
+        while not stop_event.is_set():
+            try:
+                connection, _ = sock.accept()
+            except socket.timeout:
+                continue
+
+            t_handle_client = threading.Thread(target=handle_client, args=(connection,), daemon=True)
+            t_handle_client.start()
+            threads.append(t_handle_client)
+        
+        print("スレッドの終了まち…")
+        for t in threads:
+            t.join()
+        
+    finally:
+        try:
+            sock.close()
+        finally:
+            if os.path.exists(SERVER_PATH):
+                os.unlink(SERVER_PATH)
+        print('サーバー終了')
+
+if __name__ == '__main__':
+    main()
 
 

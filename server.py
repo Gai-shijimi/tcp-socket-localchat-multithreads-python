@@ -16,16 +16,25 @@ def handler(signum, _):
 
 def handle_client(connection):
     print("クライアントと接続しました。")
-
     file = connection.makefile('rwb', buffering=0)
+    connection.settimeout(10)
     try:
-        for line in file:
-            msg = line.rstrip(b'\n').decode('utf-8')
-            print('受信：', msg)
-            response = ('サーバーからの応答：' + msg + '\n').encode('utf-8')
-            file.write(response)
+        while not stop_event.is_set():
+            
+            try:
+                line = file.readline()
+                if not line:
+                    break
+                msg = line.rstrip(b'\n').decode('utf-8')
+                print('受信：', msg)
+                response = ('サーバーからの応答：'+msg+'\n').encode('utf-8')
+                file.write(response)
+
+            except socket.timeout:
+                pass
+
     except Exception as e:
-        print('handle_clientエラー: ', e)
+        pass
 
     finally:
         try:
@@ -36,7 +45,7 @@ def handle_client(connection):
             connection.close()
         except:
             pass
-        print('クライアント切断')
+        print('クライアントとの接続を切断します')
 
 
 def main():
@@ -63,7 +72,7 @@ def main():
             except socket.timeout:
                 continue
 
-            t_handle_client = threading.Thread(target=handle_client, args=(connection,), daemon=True)
+            t_handle_client = threading.Thread(target=handle_client, args=(connection,))
             t_handle_client.start()
             threads.append(t_handle_client)
         
@@ -78,6 +87,7 @@ def main():
             if os.path.exists(SERVER_PATH):
                 os.unlink(SERVER_PATH)
         print('サーバー終了')
+       
 
 if __name__ == '__main__':
     main()

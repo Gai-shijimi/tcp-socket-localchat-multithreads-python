@@ -3,6 +3,9 @@ import signal
 import sys
 import threading
 
+print_lock = threading.Lock()
+PROMPT = 'message >>>>'
+
 SERVER_PATH = '/tmp/socket_file'
 stop_event = threading.Event()
 
@@ -15,11 +18,12 @@ def sender(file):
     try:
         while not stop_event.is_set():
             try:
-                msg = input('message >>>>')
+                msg = input()
             except EOFError:
                 stop_event.set()
                 break
             file.write((msg + '\n').encode('utf-8'))
+    
     except Exception as e:
         print('sender エラー', e)
     finally:
@@ -30,13 +34,23 @@ def receiver(file):
         while not stop_event.is_set():
             data = file.readline()
             if not data:
-                print('サーバーが切断しました。')
+                print('\nサーバーが切断しました。')
                 stop_event.set()
                 break
-            print('',data.decode('utf-8').rstrip('\n'))
+            msg = data.decode('utf-8').rstrip('\n')
+            with print_lock:
+                print(f'{msg}', flush=True)
+                raw_prompt()
+
+    except socket.timeout:
+        print("receive sockettimeout")
     
     except Exception as e:
         print('receiverエラー', e)
+
+def raw_prompt():
+    sys.stdout.write(PROMPT)
+    sys.stdout.flush()
     
 
 
@@ -53,7 +67,7 @@ def main():
 
     signal.signal(signal.SIGINT, handler)
 
-    t_sender = threading.Thread(target=sender, args=(file,))
+    t_sender = threading.Thread(target=sender, args=(file, ))
     t_receiver = threading.Thread(target=receiver, args=(file,))
 
     t_sender.start()
@@ -65,13 +79,15 @@ def main():
     finally:
         try:
             file.close()
+            print("fileを閉じました。")
         except:
             pass
         try:
             sock.close()
+            print("socketを閉じました。")
         except:
             pass
-        print('クライアント終了')
+        
 
 if __name__ == '__main__':
     main()

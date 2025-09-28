@@ -26,7 +26,7 @@ def sender(file):
                 if line == '':
                     stop_event.set()
                     break
-            file.write((line + '\n').encode('utf-8'))
+            file.write(line.encode('utf-8'))
     
     except Exception as e:
         print('sender エラー', e)
@@ -38,12 +38,16 @@ def receiver(file):
         while not stop_event.is_set():
             data = file.readline()
             if not data:
-                print('\nサーバーが切断しました。')
+                with print_lock:
+                    print('\nサーバーが切断しました。')
                 stop_event.set()
                 break
             msg = data.decode('utf-8').rstrip('\n')
             with print_lock:
-                print(f'\n{msg}', flush=True)
+                sys.stdout.write('\r')
+                sys.stdout.write(' ' * 80 + '\r')
+                print(msg, flush=True)
+                raw_prompt()
     
     except Exception as e:
         print('receiverエラー', e)
@@ -69,6 +73,8 @@ def main():
 
     t_sender = threading.Thread(target=sender, args=(file, ))
     t_receiver = threading.Thread(target=receiver, args=(file,))
+
+    raw_prompt()
 
     t_sender.start()
     t_receiver.start()

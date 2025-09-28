@@ -20,12 +20,13 @@ def handle_client(connection):
     connection.settimeout(10)
     try:
         while not stop_event.is_set():
-            
             try:
                 line = file.readline()
                 if not line:
                     break
                 msg = line.rstrip(b'\n').decode('utf-8')
+                if msg == '':
+                    continue
                 print('受信：', msg)
                 response = ('サーバーからの応答：'+msg+'\n').encode('utf-8')
                 file.write(response)

@@ -2,6 +2,7 @@ import socket
 import signal
 import sys
 import threading
+import select 
 
 print_lock = threading.Lock()
 PROMPT = 'message >>>>'
@@ -17,12 +18,15 @@ def handler(signum, _):
 def sender(file):
     try:
         while not stop_event.is_set():
-            try:
-                msg = input()
-            except EOFError:
-                stop_event.set()
+            r, _, _ = select.select([sys.stdin], [], [], 10)
+            if stop_event.is_set():
                 break
-            file.write((msg + '\n').encode('utf-8'))
+            if r:
+                line = sys.stdin.readline()
+                if line == '':
+                    stop_event.set()
+                    break
+            file.write((line + '\n').encode('utf-8'))
     
     except Exception as e:
         print('sender エラー', e)
@@ -39,11 +43,7 @@ def receiver(file):
                 break
             msg = data.decode('utf-8').rstrip('\n')
             with print_lock:
-                print(f'{msg}', flush=True)
-                raw_prompt()
-
-    except socket.timeout:
-        print("receive sockettimeout")
+                print(f'\n{msg}', flush=True)
     
     except Exception as e:
         print('receiverエラー', e)
